@@ -1,6 +1,8 @@
+use diesel::associations::HasTable;
 use diesel::query_dsl::methods::{LimitDsl, SelectDsl};
 use diesel::{RunQueryDsl, SelectableHelper};
 use juniper::{EmptySubscription, FieldResult, GraphQLObject, RootNode};
+use uuid::Uuid;
 
 use crate::database::establish_connection;
 use crate::models::user::User as SQLUser;
@@ -44,11 +46,29 @@ pub struct MutationRoot;
 
 #[juniper::graphql_object]
 impl MutationRoot {
-    fn create_user(name: String, password: String) -> FieldResult<User> {
-        Ok(User {
-            id: "Peo".to_string(),
+    fn create_user(name: String, email: String, password: String) -> FieldResult<User> {
+        let vars = Constants::new();
+        let mut db_conn = establish_connection(vars.database_url.as_str());
+
+        let user_id = Uuid::new_v4();
+        let hashed_password = password;
+
+        let new_user = SQLUser {
+            id: Some(user_id.into()),
             name,
-            hashed_password: password,
+            email,
+            hashed_password,
+            created_at: None,
+        };
+
+        let _ = diesel::insert_into(users::table())
+            .values(&new_user)
+            .execute(&mut db_conn);
+
+        Ok(User {
+            id: user_id.into(),
+            name: new_user.name,
+            hashed_password: new_user.hashed_password,
         })
     }
 }
