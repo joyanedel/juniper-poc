@@ -1,9 +1,16 @@
+use diesel::query_dsl::methods::{LimitDsl, SelectDsl};
+use diesel::{RunQueryDsl, SelectableHelper};
 use juniper::{EmptySubscription, FieldResult, GraphQLObject, RootNode};
+
+use crate::database::establish_connection;
+use crate::models::user::User as SQLUser;
+use crate::schema::users::dsl::users;
+use crate::settings::constants::Constants;
 
 #[derive(GraphQLObject)]
 #[graphql(description = "User object")]
 struct User {
-    id: i32,
+    id: String,
     name: String,
     hashed_password: String,
 }
@@ -12,12 +19,24 @@ pub struct QueryRoot;
 
 #[juniper::graphql_object]
 impl QueryRoot {
-    fn user() -> FieldResult<User> {
-        Ok(User {
-            id: 3,
-            name: "Jesús".to_owned(),
-            hashed_password: "sdas".to_owned(),
-        })
+    fn users() -> FieldResult<Vec<User>> {
+        let vars = Constants::new();
+        let mut db_conn = establish_connection(vars.database_url.as_str());
+        let users_result: Vec<SQLUser> = users
+            .limit(5)
+            .select(SQLUser::as_select())
+            .load(&mut db_conn)
+            .expect("Couldn't get user");
+        let users_result = users_result
+            .into_iter()
+            .map(|el| User {
+                id: el.id.unwrap(),
+                name: el.name,
+                hashed_password: el.hashed_password,
+            })
+            .collect();
+
+        Ok(users_result)
     }
 }
 
@@ -27,7 +46,7 @@ pub struct MutationRoot;
 impl MutationRoot {
     fn create_user(name: String, password: String) -> FieldResult<User> {
         Ok(User {
-            id: 3,
+            id: "Peo".to_string(),
             name,
             hashed_password: password,
         })
